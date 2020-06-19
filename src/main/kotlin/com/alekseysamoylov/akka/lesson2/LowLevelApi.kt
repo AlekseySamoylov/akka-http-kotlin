@@ -102,14 +102,28 @@ fun main() {
         Flow.create<HttpRequest>().map(object : akka.japi.function.Function<HttpRequest, HttpResponse> {
             override fun apply(httpRequest: HttpRequest): HttpResponse {
                 return when {
-                    httpRequest.method() == HttpMethods.GET -> HttpResponse.create()
+                    httpRequest.method() == HttpMethods.GET && httpRequest.uri.path() == "/" -> HttpResponse.create()
                         .withStatus(StatusCodes.OK)
                         .withEntity(
                             HttpEntities.create(
                                 ContentTypes.TEXT_HTML_UTF8, """
                     <html>
                     <body>
-                    <h1>Hello Akka strems</h1>
+                    <h1>Hello Akka streams</h1>
+                    <a href="/home">go home</a>
+                    </body>
+                    </html
+                """.trimIndent()
+                            )
+                        )
+                    httpRequest.method() == HttpMethods.GET && httpRequest.uri.path() == "/home" -> HttpResponse.create()
+                        .withStatus(StatusCodes.OK)
+                        .withEntity(
+                            HttpEntities.create(
+                                ContentTypes.TEXT_HTML_UTF8, """
+                    <html>
+                    <body>
+                    <h1>Hello Akka streams HOME</h1>
                     </body>
                     </html
                 """.trimIndent()
@@ -122,7 +136,7 @@ fun main() {
                                 ContentTypes.TEXT_HTML_UTF8, """
                     <html>
                     <body>
-                    Streams Resource cannod be found
+                    Streams Resource cannot be found
                     </body>
                     </html
                 """.trimIndent()
@@ -133,9 +147,13 @@ fun main() {
         }
         )
 
-    http.bind(ConnectHttp.toHost("localhost", 8081)).runForeach({ connection ->
-        connection.handleWith(streamsBasedRequestHandler, materializer)
-    }, materializer)
+//    http.bind(ConnectHttp.toHost("localhost", 8081)).runForeach({ connection ->
+//        connection.handleWith(streamsBasedRequestHandler, materializer)
+//    }, materializer)
+
+    val connectionSource = http.bindAndHandle(streamsBasedRequestHandler, ConnectHttp.toHost("localhost", 8081), materializer)
+
+
 
 
 }
