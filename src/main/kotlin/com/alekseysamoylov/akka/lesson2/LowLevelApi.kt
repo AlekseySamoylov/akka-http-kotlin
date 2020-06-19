@@ -1,5 +1,6 @@
 package com.alekseysamoylov.akka.lesson2
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.dispatch.Dispatcher
 import akka.http.javadsl.ConnectHttp
@@ -7,9 +8,12 @@ import akka.http.javadsl.Http
 import akka.http.javadsl.IncomingConnection
 import akka.http.javadsl.model.*
 import akka.stream.Materializer
+import akka.stream.javadsl.Flow
 import akka.stream.javadsl.JavaFlowSupport
 import akka.stream.javadsl.Sink
+import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.Future
 import java.time.Duration
 import java.time.Period
 import java.time.temporal.ChronoUnit
@@ -36,7 +40,7 @@ fun main() {
     serverBindingFuture.thenAccept { binding ->
         println("Server binding successful")
 //        binding.terminate(Duration.of(5, ChronoUnit.SECONDS))
-    } .exceptionally { ex ->
+    }.exceptionally { ex ->
         println("exception $ex")
         null
     }
@@ -46,31 +50,43 @@ fun main() {
         when {
             httpRequest.method() == HttpMethods.GET -> HttpResponse.create()
                 .withStatus(StatusCodes.OK)
-                .withEntity(HttpEntities.create(ContentTypes.TEXT_HTML_UTF8, """
+                .withEntity(
+                    HttpEntities.create(
+                        ContentTypes.TEXT_HTML_UTF8, """
                     <html>
                     <body>
                     <h1>Hello</h1>
                     </body>
                     </html
-                """.trimIndent()))
+                """.trimIndent()
+                    )
+                )
             httpRequest.method() == HttpMethods.POST -> HttpResponse.create()
                 .withStatus(StatusCodes.OK)
-                .withEntity(HttpEntities.create(ContentTypes.TEXT_HTML_UTF8, """
+                .withEntity(
+                    HttpEntities.create(
+                        ContentTypes.TEXT_HTML_UTF8, """
                     <html>
                     <body>
                     <h1>Hello Post</h1>
                     </body>
                     </html
-                """.trimIndent()))
+                """.trimIndent()
+                    )
+                )
             else -> HttpResponse.create()
                 .withStatus(StatusCodes.NOT_FOUND)
-                .withEntity(HttpEntities.create(ContentTypes.TEXT_HTML_UTF8, """
+                .withEntity(
+                    HttpEntities.create(
+                        ContentTypes.TEXT_HTML_UTF8, """
                     <html>
                     <body>
                     Resource cannod be found
                     </body>
                     </html
-                """.trimIndent()))
+                """.trimIndent()
+                    )
+                )
         }
     }
 
@@ -79,5 +95,47 @@ fun main() {
     }
     http.bind(ConnectHttp.toHost("localhost", 8080)).to(httpSyncConnectionHandler).run(materializer)
 //    http.bindAndHandleSync(requestHandler, ConnectHttp.toHost("localhost", 8080), materializer)
+
+
+    // Akka streams
+    val streamsBasedRequestHandler: Flow<HttpRequest, HttpResponse, NotUsed> =
+        Flow.create<HttpRequest>().map(object : akka.japi.function.Function<HttpRequest, HttpResponse> {
+            override fun apply(httpRequest: HttpRequest): HttpResponse {
+                return when {
+                    httpRequest.method() == HttpMethods.GET -> HttpResponse.create()
+                        .withStatus(StatusCodes.OK)
+                        .withEntity(
+                            HttpEntities.create(
+                                ContentTypes.TEXT_HTML_UTF8, """
+                    <html>
+                    <body>
+                    <h1>Hello Akka strems</h1>
+                    </body>
+                    </html
+                """.trimIndent()
+                            )
+                        )
+                    else -> HttpResponse.create()
+                        .withStatus(StatusCodes.NOT_FOUND)
+                        .withEntity(
+                            HttpEntities.create(
+                                ContentTypes.TEXT_HTML_UTF8, """
+                    <html>
+                    <body>
+                    Streams Resource cannod be found
+                    </body>
+                    </html
+                """.trimIndent()
+                            )
+                        )
+                }
+            }
+        }
+        )
+
+    http.bind(ConnectHttp.toHost("localhost", 8081)).runForeach({ connection ->
+        connection.handleWith(streamsBasedRequestHandler, materializer)
+    }, materializer)
+
 
 }
